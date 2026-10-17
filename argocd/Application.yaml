@@ -9,7 +9,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-
+  project: nginx
   source:
     # Replace 'ravdy' with your GitHub username after forking zen-gitops
     repoURL: https://github.com/dectrees/gitops.git
