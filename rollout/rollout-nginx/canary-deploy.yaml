@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: nginx-rollout
+  labels:
+    app: nginx
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.30.6-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+  strategy:
+    canary:
+      # 恢复双 Service 模式
+      stableService: nginx-service
+      canaryService: nginx-service-canary
+      steps:
+      - setWeight: 20
+      - pause: {duration: 10s}   # 20% 流量：自动等待 10 秒后进入下一步
+      - setWeight: 40
+      - pause: {duration: 10s}   # 40% 流量：自动等待 10 秒后进入下一步
+      - setWeight: 60
+      - pause: {}                # 60% 流量：暂停，等待人工手动 promote
+      - setWeight: 80
+      - pause: {}                # 80% 流量：暂停，等待人工手动 promote
+      # 达到 100% 后自动完成发布
+---
+# 1. 稳定版 Service：网关（HTTPRoute）将流量打到这里
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  type: ClusterIP
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+# 2. 金丝雀专属 Service：供 Argo Rollouts 控制器及网关分流使用
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service-canary
+spec:
+  type: ClusterIP
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+
